@@ -1,82 +1,43 @@
-# =========================
-# Python / Backend
-# =========================
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual Environments
-venv/
-.venv/
-env/
-ENV/
-
-# Jupyter Notebooks (optional, but good to have)
-.ipynb_checkpoints
-
-# =========================
-# Node.js / Next.js / Frontend
-# =========================
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-store
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Next.js build output
+# Next.js
 .next/
 out/
-
-# Production build objects
+build/
 dist/
-.vercel/
 
-# =========================
-# Environment Variables
-# =========================
-# Keep these secret! Never commit .env files
+# Environment variables
 .env
-.env.local
+.env*.local
 .env.development.local
 .env.test.local
 .env.production.local
-*.env
 
-# =========================
-# OS & IDE Files
-# =========================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# VS Code
+# IDE
 .vscode/
-# Keep settings.json if you want to share team settings, 
-# otherwise ignore the whole folder.
-# !.vscode/settings.json 
-
-# JetBrains / PyCharm
 .idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+*.log
+.cache/
