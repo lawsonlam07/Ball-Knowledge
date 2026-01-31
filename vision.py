@@ -3,25 +3,29 @@ import numpy as np
 from ultralytics import YOLO
 import supervision as sv
 
+# --- IMPORTS ---
+# Ensure these files exist in your 'data' folder
 from data.Coord import Coord
 from data.Ball import Ball
 from data.Court import Court
 from data.Player import Player
+from data.frame import Frame
 
 # --- CONFIG ---
 MODEL_NAME = 'yolov8m.pt' 
 
 # THRESHOLDS
-CONF_BALL = 0.10     
+CONF_BALL = 0.15      
 MAX_COAST_FRAMES = 5 
 MAX_DIST_ERROR = 100 
 
-# NEW TOGGLE: If True, returns the last known location when detection fails
+# TOGGLE: If True, returns the last known location when detection fails
 RETURN_LAST_KNOWN_POS = False
 
 def get_court_calibration(frame):
     print("✅ Using Hardcoded Court Coordinates")
     return Court(
+        # 1080p Coordinates:
         tl=Coord(746, 257), tr=Coord(1183, 254),
         br=Coord(1879, 836), bl=Coord(27, 841)
     )
@@ -83,8 +87,6 @@ def process_video(source_path: str):
     track_pos = None      
     track_vel = (0, 0)    
     frames_since_seen = 0 
-    
-    # NEW: Persist the last valid position across frames
     last_valid_pos = None 
 
     while True:
@@ -92,8 +94,8 @@ def process_video(source_path: str):
         if not ret: break
         frame_count += 1
         
-        # 1. DETECT 
-        results = model(frame, classes=[0, 32], conf=CONF_BALL, imgsz=1280, verbose=False)[0]
+        # 1. DETECT (Removed imgsz=1280 for speed)
+        results = model(frame, classes=[0, 32], conf=CONF_BALL, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(results)
         
         players = get_best_two_players(detections, raw_court)
@@ -120,7 +122,6 @@ def process_video(source_path: str):
 
         # 4. MATCH
         matched_candidate = None
-        
         if predicted_pos is not None:
             best_dist = float('inf')
             for cand in ball_candidates:
@@ -128,38 +129,29 @@ def process_video(source_path: str):
                 if dist < best_dist and dist < MAX_DIST_ERROR:
                     best_dist = dist
                     matched_candidate = cand
-
         elif ball_candidates:
             matched_candidate = max(ball_candidates, key=lambda x: x['conf'])
 
         # 5. UPDATE
         if matched_candidate:
-            # Hit: Update velocity and position
             new_pos = matched_candidate['pos']
             if track_pos is not None:
                 inst_vel = (new_pos[0] - track_pos[0], new_pos[1] - track_pos[1])
                 track_vel = (0.7 * inst_vel[0] + 0.3 * track_vel[0], 
                              0.7 * inst_vel[1] + 0.3 * track_vel[1])
-            
             track_pos = new_pos
             frames_since_seen = 0 
             ball_obj = Ball(pos=Coord(*track_pos))
-            last_valid_pos = track_pos # Save for fallback
-
+            last_valid_pos = track_pos 
         elif track_pos is not None and frames_since_seen < MAX_COAST_FRAMES:
-            # Coast: Predict position using velocity
             track_pos = (int(predicted_pos[0]), int(predicted_pos[1]))
             frames_since_seen += 1
             ball_obj = Ball(pos=Coord(*track_pos))
-            last_valid_pos = track_pos # Save for fallback
-
+            last_valid_pos = track_pos 
         else:
-            # Lost: Reset tracker
             track_pos = None
             track_vel = (0, 0)
             frames_since_seen = 0
-            
-            # FALLBACK: If enabled, return the last known location
             if RETURN_LAST_KNOWN_POS and last_valid_pos is not None:
                 ball_obj = Ball(pos=Coord(*last_valid_pos))
 
@@ -167,6 +159,7 @@ def process_video(source_path: str):
 
     cap.release()
 
+# --- VISION SYSTEM CLASS ---
 class VisionSystem:
     def __init__(self, video_path):
         self.pipeline = process_video(video_path)

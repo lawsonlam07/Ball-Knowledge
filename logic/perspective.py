@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from data.Coord import Coord
+
 TENNIS_COURT_LENGTH: float = 23.77
 TENNIS_COURT_SINGLES_WIDTH: float = 8.23
 
@@ -18,10 +20,17 @@ class FrameUnskew:
         else:
             raise ValueError()
 
-    def unskew_cords(self, points: list[list[float]]):
+    def unskew_coords(self, points: list[list[float]]):
         pts_array = np.array(points, dtype="float32").reshape(-1, 1, 2)
         return cv2.perspectiveTransform(pts_array, self.matrix).reshape(-1, 2)
         # returns list[list[float]]
 
+    def unskew_coords_to_coords(self, points: list[list[float]]):
+        pts_array = np.array([points], dtype="float32").reshape(-1, 1, 2)
+        transformed = cv2.perspectiveTransform(pts_array, self.matrix)
+        res = transformed.reshape(-1, 2)[0]
+        return Coord(float(res[0]), float(res[1]))
+
+
 frame = FrameUnskew([[0, 0], [0, 1], [1, 1], [1, 0]])
-print(frame.unskew_cords([[0.5, 0]]))
+print(frame.unskew_coords([[0.5, 0]]))
