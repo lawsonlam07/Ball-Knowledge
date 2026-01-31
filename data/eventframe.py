@@ -1,4 +1,4 @@
-from .Frame import Frame
+from .frame import Frame
 
 class EventFrame:
   def __init__(self, frame : Frame, event : str):
