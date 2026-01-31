@@ -2,7 +2,7 @@ import cv2
 import sys
 
 # CONFIG
-VIDEO_PATH = "tennis2.mp4"
+VIDEO_PATH = "tennis2_highres.mp4"
 
 # Global State
 points = []
