@@ -13,23 +13,68 @@ interface CommentarySegment {
   type: "play" | "analysis" | "excitement"
 }
 
-// Mock commentary data - replace with actual data from backend
-const commentarySegments: CommentarySegment[] = [
-  { timestamp: 0, text: "Welcome to this exciting tennis match! Both players are warming up at the baseline.", type: "play" },
-  { timestamp: 5, text: "Great serve by the player on the right! Notice the excellent toss and shoulder rotation.", type: "analysis" },
-  { timestamp: 10, text: "What a rally! Both players showing incredible footwork and court coverage!", type: "excitement" },
-  { timestamp: 15, text: "The backhand crosscourt winner! Absolutely stunning shot placement.", type: "excitement" },
-]
+// Parse commentary text from Claude to extract timestamped segments
+function parseCommentaryText(text: string): CommentarySegment[] {
+  if (!text) return []
+
+  const segments: CommentarySegment[] = []
+
+  // Split by lines to preserve timestamp structure
+  const lines = text.split('\n').filter(line => line.trim())
+
+  for (const line of lines) {
+    let timestamp = 0
+    let text = line.trim()
+
+    // Try to match "MM:SS - text" or "[MM:SS] text" format
+    const mmssMatch = line.match(/^(?:\[)?(\d+):(\d+)(?:\])?[-:\s]+(.+)$/)
+    if (mmssMatch) {
+      const minutes = parseInt(mmssMatch[1])
+      const seconds = parseInt(mmssMatch[2])
+      timestamp = minutes * 60 + seconds
+      text = mmssMatch[3].trim()
+    } else {
+      // Try to match "At X seconds - text" or "X seconds - text" format
+      const secondsMatch = line.match(/^(?:At\s+)?(?:\[)?(\d+(?:\.\d+)?)\s*(?:seconds?|s)(?:\])?[-:\s]+(.+)$/i)
+      if (secondsMatch) {
+        timestamp = parseFloat(secondsMatch[1])
+        text = secondsMatch[2].trim()
+      }
+    }
+
+    if (text) {
+      // Determine type based on keywords
+      const lowerText = text.toLowerCase()
+      let type: "play" | "analysis" | "excitement" = "play"
+
+      if (lowerText.includes('!') || lowerText.includes('incredible') ||
+          lowerText.includes('amazing') || lowerText.includes('wow')) {
+        type = "excitement"
+      } else if (lowerText.includes('notice') || lowerText.includes('technique') ||
+                 lowerText.includes('strategy')) {
+        type = "analysis"
+      }
+
+      segments.push({
+        timestamp,
+        text: text.trim(),
+        type
+      })
+    }
+  }
+
+  return segments
+}
 
 export default function ViewerPage() {
   const searchParams = useSearchParams()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const isTogglingRef = useRef(false)
 
-  // Get video source from URL params or use default
-  const videoSource = useMemo(() => {
-    return searchParams.get('video') || "/tennis.mp4"
-  }, [searchParams])
-
+  // State declarations
+  const [commentaryResult, setCommentaryResult] = useState<any>(null)
+  const [commentarySegments, setCommentarySegments] = useState<CommentarySegment[]>([])
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -38,6 +83,64 @@ export default function ViewerPage() {
   const [showVolumeSlider, setShowVolumeSlider] = useState(false)
   const [showControls, setShowControls] = useState(false)
 
+  // Get video source from sessionStorage (uploaded video) or URL params or use default
+  const videoSource = useMemo(() => {
+    const uploadedVideo = sessionStorage.getItem("uploadedVideoUrl")
+    console.log("Video source:", uploadedVideo || searchParams.get('video') || "/tennis.mp4")
+    return uploadedVideo || searchParams.get('video') || "/tennis.mp4"
+  }, [searchParams])
+
+  // Load commentary result from sessionStorage
+  useEffect(() => {
+    const resultStr = sessionStorage.getItem("commentaryResult")
+    if (resultStr) {
+      const result = JSON.parse(resultStr)
+      setCommentaryResult(result)
+
+      // Parse commentary text into segments with timestamps
+      const segments = parseCommentaryText(result.commentary_text)
+      setCommentarySegments(segments)
+    }
+
+    // Set initial volumes - video at 20%, commentary at 100%
+    // Volume is initially 100, so video = 0.2, audio = 1.0
+    if (videoRef.current) {
+      videoRef.current.volume = 0.2
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = 1.0
+    }
+
+    // Cleanup: Revoke blob URL when component unmounts
+    return () => {
+      const blobUrl = sessionStorage.getItem("uploadedVideoUrl")
+      if (blobUrl && blobUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(blobUrl)
+      }
+    }
+  }, [])
+
+  // Sync audio and video playback (only if commentary audio exists)
+  useEffect(() => {
+    // Only sync if we have commentary audio
+    if (!commentaryResult?.audio_url) return
+
+    const syncInterval = setInterval(() => {
+      if (videoRef.current && audioRef.current && isPlaying) {
+        const videoTime = videoRef.current.currentTime
+        const audioTime = audioRef.current.currentTime
+        const timeDiff = Math.abs(videoTime - audioTime)
+
+        // If audio and video are out of sync by more than 0.3 seconds, resync
+        if (timeDiff > 0.3) {
+          audioRef.current.currentTime = videoTime
+        }
+      }
+    }, 1000) // Check every second
+
+    return () => clearInterval(syncInterval)
+  }, [isPlaying, commentaryResult])
+
   // Find current commentary based on video time
   const currentCommentary = useMemo(() => {
     return commentarySegments
@@ -45,14 +148,42 @@ export default function ViewerPage() {
       .sort((a, b) => b.timestamp - a.timestamp)[0] || null
   }, [currentTime])
 
-  const togglePlay = useCallback(() => {
-    if (videoRef.current) {
+  const togglePlay = useCallback(async () => {
+    if (!videoRef.current) return
+
+    // Force unlock if stuck for more than 2 seconds
+    if (isTogglingRef.current) {
+      console.warn("Toggle already in progress, forcing unlock...")
+      return
+    }
+
+    isTogglingRef.current = true
+
+    // Safety timeout to always unlock after 2 seconds
+    const timeoutId = setTimeout(() => {
+      console.warn("Toggle operation timed out, releasing lock")
+      isTogglingRef.current = false
+    }, 2000)
+
+    try {
       if (isPlaying) {
         videoRef.current.pause()
+        if (audioRef.current) audioRef.current.pause()
       } else {
-        videoRef.current.play()
+        await videoRef.current.play()
+        if (audioRef.current) {
+          try {
+            await audioRef.current.play()
+          } catch (audioError) {
+            console.warn("Audio play failed:", audioError)
+          }
+        }
       }
-      setIsPlaying(!isPlaying)
+    } catch (error) {
+      console.error("Error toggling playback:", error)
+    } finally {
+      clearTimeout(timeoutId)
+      isTogglingRef.current = false
     }
   }, [isPlaying])
 
@@ -69,6 +200,8 @@ export default function ViewerPage() {
   const handleLoadedMetadata = () => {
     if (videoRef.current && videoRef.current.duration) {
       setDuration(videoRef.current.duration)
+      // Set video volume when metadata is loaded
+      videoRef.current.volume = 0.2
     }
   }
 
@@ -76,30 +209,103 @@ export default function ViewerPage() {
     if (videoRef.current && videoRef.current.duration && duration === 0) {
       setDuration(videoRef.current.duration)
     }
+    // Ensure volumes are set when media can play
+    if (videoRef.current) {
+      videoRef.current.volume = 0.2
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = 1.0
+    }
   }
 
-  const handleSeek = (value: number[]) => {
+  const handlePlay = () => {
+    setIsPlaying(true)
+    // Ensure video volume is set when playback starts
     if (videoRef.current) {
-      videoRef.current.currentTime = value[0]
-      setCurrentTime(value[0])
+      videoRef.current.volume = (volume / 100) * 0.2
+    }
+  }
+
+  const handlePause = () => {
+    setIsPlaying(false)
+  }
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error("Video error:", e.currentTarget.error)
+    if (videoRef.current?.error) {
+      console.error("Error code:", videoRef.current.error.code)
+      console.error("Error message:", videoRef.current.error.message)
+    }
+  }
+
+  const handleSeek = async (value: number[]) => {
+    if (!videoRef.current) return
+
+    if (isTogglingRef.current) {
+      console.warn("Seek already in progress, forcing unlock...")
+      return
+    }
+
+    isTogglingRef.current = true
+
+    // Safety timeout to always unlock after 2 seconds
+    const timeoutId = setTimeout(() => {
+      console.warn("Seek operation timed out, releasing lock")
+      isTogglingRef.current = false
+    }, 2000)
+
+    try {
+      const newTime = value[0]
+      const wasPlaying = isPlaying
+
+      // Pause both media elements first
+      if (wasPlaying) {
+        videoRef.current.pause()
+        if (audioRef.current) audioRef.current.pause()
+      }
+
+      // Seek to new time
+      videoRef.current.currentTime = newTime
+      if (audioRef.current) audioRef.current.currentTime = newTime
+      setCurrentTime(newTime)
+
+      // Resume playback if it was playing before
+      if (wasPlaying) {
+        await videoRef.current.play()
+        if (audioRef.current) await audioRef.current.play()
+      }
+    } catch (error) {
+      console.error("Error during seek:", error)
+    } finally {
+      clearTimeout(timeoutId)
+      isTogglingRef.current = false
     }
   }
 
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0]
     setVolume(newVolume)
+
+    // Video audio at 20% of slider value, commentary at 100% of slider value
     if (videoRef.current) {
-      videoRef.current.volume = newVolume / 100
+      videoRef.current.volume = (newVolume / 100) * 0.2
     }
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume / 100
+    }
+
     setIsMuted(newVolume === 0)
   }
 
   const toggleMute = useCallback(() => {
+    const newMutedState = !isMuted
     if (videoRef.current) {
-      const newMutedState = !isMuted
       videoRef.current.muted = newMutedState
-      setIsMuted(newMutedState)
     }
+    if (audioRef.current) {
+      audioRef.current.muted = newMutedState
+    }
+    setIsMuted(newMutedState)
   }, [isMuted])
 
   const toggleFullscreen = useCallback(() => {
@@ -112,12 +318,49 @@ export default function ViewerPage() {
     }
   }, [])
 
-  const skipTime = useCallback((seconds: number) => {
-    if (videoRef.current) {
-      const newTime = videoRef.current.currentTime + seconds
-      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.duration, newTime))
+  const skipTime = useCallback(async (seconds: number) => {
+    if (!videoRef.current) return
+
+    if (isTogglingRef.current) {
+      console.warn("Skip already in progress, forcing unlock...")
+      return
     }
-  }, [])
+
+    isTogglingRef.current = true
+
+    // Safety timeout to always unlock after 2 seconds
+    const timeoutId = setTimeout(() => {
+      console.warn("Skip operation timed out, releasing lock")
+      isTogglingRef.current = false
+    }, 2000)
+
+    try {
+      const wasPlaying = isPlaying
+      const newTime = videoRef.current.currentTime + seconds
+      const clampedTime = Math.max(0, Math.min(videoRef.current.duration, newTime))
+
+      // Pause if playing
+      if (wasPlaying) {
+        videoRef.current.pause()
+        if (audioRef.current) audioRef.current.pause()
+      }
+
+      // Seek
+      videoRef.current.currentTime = clampedTime
+      if (audioRef.current) audioRef.current.currentTime = clampedTime
+
+      // Resume if was playing
+      if (wasPlaying) {
+        await videoRef.current.play()
+        if (audioRef.current) await audioRef.current.play()
+      }
+    } catch (error) {
+      console.error("Error during skip:", error)
+    } finally {
+      clearTimeout(timeoutId)
+      isTogglingRef.current = false
+    }
+  }, [isPlaying])
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60)
@@ -157,18 +400,30 @@ export default function ViewerPage() {
           break
         case 'arrowup':
           e.preventDefault()
-          setVolume(prev => Math.min(100, prev + 5))
-          if (videoRef.current) {
-            videoRef.current.volume = Math.min(1, (volume + 5) / 100)
-          }
+          setVolume(prev => {
+            const newVol = Math.min(100, prev + 5)
+            if (videoRef.current) {
+              videoRef.current.volume = (newVol / 100) * 0.2
+            }
+            if (audioRef.current) {
+              audioRef.current.volume = newVol / 100
+            }
+            return newVol
+          })
           setIsMuted(false)
           break
         case 'arrowdown':
           e.preventDefault()
-          setVolume(prev => Math.max(0, prev - 5))
-          if (videoRef.current) {
-            videoRef.current.volume = Math.max(0, (volume - 5) / 100)
-          }
+          setVolume(prev => {
+            const newVol = Math.max(0, prev - 5)
+            if (videoRef.current) {
+              videoRef.current.volume = (newVol / 100) * 0.2
+            }
+            if (audioRef.current) {
+              audioRef.current.volume = newVol / 100
+            }
+            return newVol
+          })
           break
         case 'm':
           e.preventDefault()
@@ -191,19 +446,19 @@ export default function ViewerPage() {
           e.preventDefault()
           if (videoRef.current && duration) {
             const percentage = parseInt(e.key) * 10
-            videoRef.current.currentTime = (duration * percentage) / 100
+            handleSeek([(duration * percentage) / 100])
           }
           break
         case 'home':
           e.preventDefault()
           if (videoRef.current) {
-            videoRef.current.currentTime = 0
+            handleSeek([0])
           }
           break
         case 'end':
           e.preventDefault()
           if (videoRef.current && duration) {
-            videoRef.current.currentTime = duration
+            handleSeek([duration])
           }
           break
         default:
@@ -232,6 +487,15 @@ export default function ViewerPage() {
           </Button>
         </div>
 
+        {/* Warning banner if audio is not available */}
+        {commentaryResult && !commentaryResult.audio_url && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              ⚠️ Audio commentary unavailable. Text commentary is displayed below.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Video Player */}
           <div className="lg:col-span-2">
@@ -247,21 +511,22 @@ export default function ViewerPage() {
                 onLoadedMetadata={handleLoadedMetadata}
                 onCanPlay={handleCanPlay}
                 onLoadedData={handleLoadedMetadata}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onError={handleVideoError}
                 onClick={togglePlay}
                 src={videoSource}
               >
                 Your browser does not support the video tag.
               </video>
 
-              {/* Video Overlay - Commentary */}
-              {currentCommentary && (
-                <div className="absolute bottom-24 left-4 right-4 pointer-events-none">
-                  <div className="p-3 rounded-lg bg-black/70 backdrop-blur-md border border-white/20">
-                    <p className="text-sm md:text-base font-medium text-white">
-                      {currentCommentary.text}
-                    </p>
-                  </div>
-                </div>
+              {/* Audio Commentary (synced with video) */}
+              {commentaryResult?.audio_url && (
+                <audio
+                  ref={audioRef}
+                  src={`http://localhost:5000${commentaryResult.audio_url}`}
+                  preload="auto"
+                />
               )}
 
               {/* Video Controls Overlay */}

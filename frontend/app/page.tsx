@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Upload, Link as LinkIcon } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,8 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { setVideoFile as storeVideoFile } from "@/lib/videoStorage"
 
 export default function Page() {
+  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadMethod, setUploadMethod] = useState<"file" | "url">("file")
   const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -59,15 +62,32 @@ export default function Page() {
   }
 
   const handleSubmit = () => {
-    // TODO: Navigate to loading page and submit to backend
-    console.log({
+    // Store form data in sessionStorage for the loading page to use
+    const formData = {
       uploadMethod,
-      videoFile: videoFile?.name,
+      videoFileName: videoFile?.name || "",
       videoUrl,
-      voice,
-      expertiseLevel,
-      commentaryStyle
-    })
+      voice: voice || "Adam",
+      expertiseLevel: expertiseLevel || "intermediate",
+      commentaryStyle: commentaryStyle || "professional",
+    }
+
+    sessionStorage.setItem("videoFormData", JSON.stringify(formData))
+
+    // Store video file in memory (not sessionStorage - too large!)
+    if (videoFile && uploadMethod === "file") {
+      storeVideoFile(videoFile)
+
+      // Create a blob URL for the video to use in the viewer
+      const videoBlobUrl = URL.createObjectURL(videoFile)
+      sessionStorage.setItem("uploadedVideoUrl", videoBlobUrl)
+    } else if (uploadMethod === "url" && videoUrl) {
+      // For URL uploads, just store the URL
+      sessionStorage.setItem("uploadedVideoUrl", videoUrl)
+    }
+
+    // Navigate to loading page immediately
+    router.push("/loading-page")
   }
 
   const canSubmit = (uploadMethod === "file" && videoFile) || (uploadMethod === "url" && videoUrl)
