@@ -1,4 +1,4 @@
-from Coord import Coord
+from .Coord import Coord
 
 class Ball:
   def __init__(self, pos : Coord):

@@ -1,4 +1,4 @@
-from Coord import Coord
+from .Coord import Coord
 
 class Court:
   def __init__(self, tl : Coord, tr : Coord, br : Coord, bl : Coord):

@@ -367,6 +367,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "elevenlabs" },
+    { name = "numpy" },
     { name = "opencv-python" },
     { name = "supervision" },
     { name = "ultralytics" },
@@ -376,6 +377,7 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.77.0" },
     { name = "elevenlabs", specifier = ">=2.33.1" },
+    { name = "numpy", specifier = ">=2.0.0" },
     { name = "opencv-python", specifier = ">=4.13.0.90" },
     { name = "supervision", specifier = ">=0.27.0" },
     { name = "ultralytics", specifier = ">=8.4.9" },
