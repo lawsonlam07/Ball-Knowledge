@@ -2,7 +2,7 @@ import json
 import os
 from prompts import generate_commentary, speak_text
 
-# 1. The Example JSON Data
+# 1. The Example JSON Data (Sequence of 3 events)
 TEST_DATA = {
     "metadata": {
         "court_length_meters": 23.77,
@@ -31,46 +31,33 @@ TEST_DATA = {
 }
 
 def main():
-    print("🎾 Starting JSON -> Claude -> ElevenLabs Test...\n")
+    print("🎾 Starting Full Sequence Test (One Audio Clip)...\n")
     
-    # We pass the metadata once so Claude understands the context (optional, but helpful)
-    metadata_str = json.dumps(TEST_DATA["metadata"])
+    # 1. Convert the ENTIRE JSON object to a string
+    full_json_str = json.dumps(TEST_DATA, indent=2)
+    
+    print("   CONTEXT SENT TO CLAUDE:")
+    print("   (Sending full sequence of 3 events...)\n")
 
-    for i, raw_event in enumerate(TEST_DATA["events"]):
-        print(f"--- Processing Event {i+1}: {raw_event['event']} ---")
+    # 2. Generate Commentary (One cohesive take)
+    commentary_text = generate_commentary(full_json_str, "Hype Man")
+    print(f"   🎙️  Full Commentary: \"{commentary_text}\"\n")
+    
+    # 3. Generate Audio (One single file)
+    print("   🔊 Generating Single Audio File...")
+    try:
+        audio_stream = speak_text(commentary_text)
         
-        # Prepare the payload: Metadata + Specific Event
-        # We send the raw JSON snippet directly as requested
-        payload = {
-            "context": json.loads(metadata_str),
-            "current_event": raw_event
-        }
+        filename = "full_commentary.mp3"
+        with open(filename, "wb") as f:
+            for chunk in audio_stream:
+                if chunk:
+                    f.write(chunk)
+                    
+        print(f"   ✅ Success! Saved to {filename}")
         
-        payload_str = json.dumps(payload, indent=2)
-        
-        # --- AI GENERATION ---
-        print(f"   Context Sent to Claude:\n{payload_str}\n")
-        
-        # 1. Generate Text (Claude)
-        # Using "Hype Man" to see if it picks up on the 'shot' excitement
-        commentary_text = generate_commentary(payload_str, "Hype Man")
-        print(f"   🎙️ Commentary: \"{commentary_text}\"")
-        
-        # 2. Generate Audio (ElevenLabs)
-        print("   🔊 Generating Audio Stream...")
-        try:
-            audio_stream = speak_text(commentary_text)
-            
-            # 3. Save MP3
-            filename = f"test_event_{i+1}.mp3"
-            with open(filename, "wb") as f:
-                for chunk in audio_stream:
-                    if chunk:
-                        f.write(chunk)
-            print(f"   ✅ Saved audio to {filename}\n")
-            
-        except Exception as e:
-            print(f"   ❌ Audio generation failed: {e}\n")
+    except Exception as e:
+        print(f"   ❌ Audio generation failed: {e}")
 
 if __name__ == "__main__":
     main()
