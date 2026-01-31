@@ -1,5 +1,3 @@
-from dataclasses import dataclass, asdict
-
 import numpy as np
 from data.framestack import FrameStack
 from data.frame import NormalisedFrame
@@ -8,14 +6,9 @@ from logic.perspective import TENNIS_COURT_LENGTH
 
 # --- EVENT CLASSES ---
 
-@dataclass
 class Event:
-    def to_dict(self):
-        # asdict(self) gets any fields you add later (like x, y coords)
-        data = asdict(self)
-        # Add the class name so you know what event it is in the JSON
-        data["event_type"] = self.__class__.__name__
-        return data
+    def to_string(self):
+        return self.__class__.__name__
 
 
 class RallyEvent(Event): pass
