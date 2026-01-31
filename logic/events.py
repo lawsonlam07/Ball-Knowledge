@@ -21,7 +21,6 @@ class BounceEvent(Event): pass
 class ShotEvent(Event): pass
 class RightOfNetEvent(Event): pass
 class LeftOfNetEvent(Event): pass
-class VolleyEvent(Event): pass
 class PlayerUpEvent(Event): pass
 class PlayerDownEvent(Event): pass
 class PlayerLeftEvent(Event): pass
