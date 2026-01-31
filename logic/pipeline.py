@@ -19,6 +19,8 @@ def process_frames():
     while True:
         i = i + 1
         frame: Frame = system.getNextFrame()
+        if frame is None:
+            break
         normaliser = FrameUnskew(get_court_calibration(frame).to_vectors())
         normalised = frame.map(normaliser)
         # Push onto frame stack
@@ -41,4 +43,4 @@ def process_frames():
     # Merge consecutive events
     order.mergeConsecutiveEvents()
     json_array = json.dumps([asdict(e) for e in order.orderedEvents], indent=4)
-    print(json_array)
+    return json_array
