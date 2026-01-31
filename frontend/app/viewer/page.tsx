@@ -72,6 +72,7 @@ export default function ViewerPage() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const isTogglingRef = useRef(false)
   const lastToggleTimeRef = useRef(0)
+  const activeCommentaryRef = useRef<HTMLButtonElement>(null)
 
   // State declarations
   const [commentaryResult, setCommentaryResult] = useState<any>(null)
@@ -169,6 +170,16 @@ export default function ViewerPage() {
       .filter(seg => seg.timestamp <= currentTime)
       .sort((a, b) => b.timestamp - a.timestamp)[0] || null
   }, [currentTime])
+
+  // Auto-scroll to active commentary
+  useEffect(() => {
+    if (activeCommentaryRef.current) {
+      activeCommentaryRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      })
+    }
+  }, [currentCommentary])
 
   const togglePlay = useCallback(async () => {
     if (!videoRef.current) return
@@ -545,13 +556,13 @@ export default function ViewerPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Video Player */}
-          <div className="lg:col-span-2">
-            <div
-              className="relative bg-black rounded-lg overflow-hidden group"
-              onMouseEnter={() => setShowControls(true)}
-              onMouseLeave={() => setShowControls(false)}
-            >
+            {/* Video Player */}
+            <div className="lg:col-span-2">
+              <div
+                className="relative bg-black rounded-lg overflow-hidden group aspect-video"
+                onMouseEnter={() => setShowControls(true)}
+                onMouseLeave={() => setShowControls(false)}
+              >
               <video
                 ref={videoRef}
                 className="w-full aspect-video cursor-pointer"
@@ -691,12 +702,13 @@ export default function ViewerPage() {
           </div>
 
           {/* Commentary Timeline */}
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm">
-            <h2 className="text-sm font-semibold mb-3 text-slate-600 dark:text-slate-400 uppercase tracking-wide">Commentary</h2>
-            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm flex flex-col max-h-120">
+            <h2 className="text-sm font-semibold mb-3 text-slate-600 dark:text-slate-400 uppercase tracking-wide shrink-0">Commentary</h2>
+            <div className="space-y-2 overflow-y-auto pr-2">
               {commentarySegments.map((segment, index) => (
                 <button
                   key={index}
+                  ref={currentCommentary?.timestamp === segment.timestamp ? activeCommentaryRef : null}
                   onClick={() => handleSeek([segment.timestamp])}
                   className={`w-full text-left p-3 rounded-lg transition-all hover:bg-slate-100 dark:hover:bg-slate-700 ${
                     currentCommentary?.timestamp === segment.timestamp

@@ -132,24 +132,28 @@ export default function Page() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={videoFile ? undefined : handleClickUpload}
-              className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+              className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors min-h-50 flex items-center justify-center ${
                 isDragging
                   ? "border-primary bg-primary/5"
                   : "border-slate-300 dark:border-slate-700"
               } ${!videoFile ? "cursor-pointer hover:border-primary hover:bg-primary/5" : ""}`}
             >
               {videoFile ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Selected: {videoFile.name}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setVideoFile(null)}
-                  >
-                    Remove
-                  </Button>
+                <div className="space-y-4 w-full">
+                  <Upload className="h-12 w-12 mx-auto text-green-500" />
+                  <div>
+                    <p className="text-base font-medium text-slate-700 dark:text-slate-300">
+                      {videoFile.name}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVideoFile(null)}
+                      className="mt-2"
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">

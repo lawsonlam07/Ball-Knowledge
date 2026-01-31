@@ -302,6 +302,7 @@ Generate a natural, flowing commentary that:
 6. Sounds natural when spoken aloud
 7. Includes player movements, shot descriptions, and crowd reactions
 8. Don't refer to players' names unless they appear onscreen
+9. Don't refer to the score unless it appears onscreen
 
 Example format:
 0:00 - Welcome to this exciting tennis match
