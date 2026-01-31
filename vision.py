@@ -9,7 +9,7 @@ from data.Coord import Coord
 from data.Ball import Ball
 from data.Court import Court
 from data.Player import Player
-from data.Frame import Frame 
+from data.frame import Frame 
 
 # --- CONFIG ---
 MODEL_NAME = 'yolov8m.pt' 
