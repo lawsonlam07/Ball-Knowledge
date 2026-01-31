@@ -1,6 +1,7 @@
 import numpy as np
 from data.framestack import FrameStack
 from data.frame import NormalisedFrame
+from logic.perspective import TENNIS_COURT_LENGTH
 
 
 # --- EVENT CLASSES ---
@@ -30,7 +31,7 @@ class LeftOfNetEvent(Event): pass
 class SideTester:
     def __init__(self, side: str):
         self.side = side
-        self.net_pos_x = 11.885
+        self.net_pos_x = TENNIS_COURT_LENGTH/2
 
     def test_event(self, frames: FrameStack):
         recent = frames.takeFrames(1)
