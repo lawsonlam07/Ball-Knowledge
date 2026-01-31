@@ -1,14 +1,9 @@
 import cv2
-import base64
-import json
-import os
-import re
+import numpy as np
 from ultralytics import YOLO
 import supervision as sv
-import anthropic
 
 # IMPORT YOUR CLASSES
-# (Adjust these imports if your files are named differently)
 from data.Coord import Coord
 from data.Ball import Ball
 from data.Court import Court
@@ -16,83 +11,94 @@ from data.Player import Player
 
 # --- CONFIG ---
 MODEL_NAME = 'yolov8m.pt' 
-CONFIDENCE_THRESHOLD = 0.25
 
-def extract_json_from_text(text):
-    """Helper to clean Claude's output"""
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    if match: return match.group(0)
-    return text
+# THRESHOLDS
+CONF_PLAYER = 0.25  # Lowered slightly to ensure we catch players even when blurry
+CONF_BALL = 0.15    # Very low to catch fast balls
 
 def get_court_calibration(frame):
-    """
-    Sends Frame 1 to Claude to get the RAW pixel corners.
-    Returns a Court object.
-    """
-    print("🤖 Calibrating Court via Claude...")
-    
-    # Resize to save bandwidth/tokens
-    height, width = frame.shape[:2]
-    scale = 640 / width
-    small_frame = cv2.resize(frame, (640, int(height * scale)))
-    
-    _, buffer = cv2.imencode(".jpg", small_frame)
-    base64_image = base64.b64encode(buffer).decode("utf-8")
+    print("✅ Using Hardcoded Court Coordinates")
+    return Court(
+        tl=Coord(746, 257),
+        tr=Coord(1183, 254),
+        br=Coord(1879, 836),
+        bl=Coord(27, 841)
+    )
 
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    
-    prompt = """
-    Identify the pixel coordinates of the 4 corners of the SINGLES tennis court.
-    Return JSON with keys "tl", "tr", "br", "bl". Format: [x, y].
+def is_point_in_court(point, court, buffer=100):
     """
+    Checks if a point is inside the court + a buffer area.
+    Reduced buffer to 100px to help exclude umpires/benches.
+    """
+    polygon = np.array([
+        [court.tl.x, court.tl.y],
+        [court.tr.x, court.tr.y],
+        [court.br.x, court.br.y],
+        [court.bl.x, court.bl.y]
+    ], np.int32)
+    
+    dist = cv2.pointPolygonTest(polygon, (float(point[0]), float(point[1])), True)
+    return dist >= -buffer
 
-    try:
-        message = client.messages.create(
-            model="claude-3-5-sonnet-latest",
-            max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64_image}},
-                    {"type": "text", "text": prompt}
-                ]
-            }]
-        )
+def get_best_two_players(detections, court):
+    """
+    Selects exactly one player for the Top Half and one for the Bottom Half.
+    Ignores umpires (middle) and crowd (outside).
+    """
+    top_candidate = None
+    bottom_candidate = None
+    
+    # Calculate an approximate "net line" Y-coordinate
+    # (Midpoint between top-y and bottom-y)
+    net_y = (court.tl.y + court.bl.y) / 2
+
+    # Filter for class 0 (Person)
+    people = detections[detections.class_id == 0]
+
+    for i, box in enumerate(people.xyxy):
+        # Calculate key points
+        x1, y1, x2, y2 = box
+        feet_pos = (int((x1 + x2) / 2), int(y2))
+        torso_pos = (int((x1 + x2) / 2), int((y1 + y2) / 2))
+        conf = people.confidence[i]
+
+        # 1. GEOMETRY CHECK: Must be inside/near court
+        if not is_point_in_court(feet_pos, court, buffer=150):
+            continue
+
+        # 2. SPLIT: Is this person above or below the net?
+        if feet_pos[1] < net_y:
+            # TOP HALF CANDIDATE
+            # Logic: We want the person "deepest" in the court (closest to baseline)
+            # or simply highest confidence. Confidence is usually safer.
+            if top_candidate is None or conf > top_candidate['conf']:
+                top_candidate = {'pos': torso_pos, 'conf': conf, 'name': 'Top'}
+        else:
+            # BOTTOM HALF CANDIDATE
+            if bottom_candidate is None or conf > bottom_candidate['conf']:
+                bottom_candidate = {'pos': torso_pos, 'conf': conf, 'name': 'Bottom'}
+
+    # Compile the final list of up to 2 players
+    final_players = []
+    if top_candidate:
+        final_players.append(Player(pos=Coord(*top_candidate['pos']), name="P2")) # Top
+    if bottom_candidate:
+        final_players.append(Player(pos=Coord(*bottom_candidate['pos']), name="P1")) # Bottom
         
-        # Parse JSON
-        data = json.loads(extract_json_from_text(message.content[0].text))
-        
-        # Scale back up to original resolution
-        def make_coord(key):
-            x, y = data[key]
-            return Coord(int(x / scale), int(y / scale))
-
-        return Court(
-            tl=make_coord("tl"),
-            tr=make_coord("tr"),
-            br=make_coord("br"),
-            bl=make_coord("bl")
-        )
-
-    except Exception as e:
-        print(f"⚠️ Calibration failed: {e}")
-        # Fallback: Return a dummy court or raise error
-        raise ValueError("Could not detect court corners.")
+    return final_players
 
 def process_video(source_path: str):
-    """
-    Yields a tuple: (frame_number, [Player], Ball, Court)
-    """
     cap = cv2.VideoCapture(source_path)
     model = YOLO(MODEL_NAME)
-    tracker = sv.ByteTrack()
-
-    # 1. GET STATIC COURT DATA (Once)
+    
+    # NOTE: Tracker removed. 
+    # Since we are spatially assigning "Top" and "Bottom" every frame, 
+    # we don't need complex ID tracking (which fails when players leave frame).
+    
     ret, first_frame = cap.read()
     if not ret: raise ValueError("Video empty")
     
     raw_court = get_court_calibration(first_frame)
-    print(f"✅ Court Detected: {raw_court.tl.x}, {raw_court.tl.y} ...")
     
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     frame_count = 0
@@ -102,41 +108,35 @@ def process_video(source_path: str):
         if not ret: break
         frame_count += 1
         
-        # 2. DETECT OBJECTS
-        results = model(frame, classes=[0, 32], conf=CONFIDENCE_THRESHOLD, verbose=False)[0]
+        # 1. DETECT EVERYTHING
+        results = model(frame, classes=[0, 32], conf=CONF_BALL, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(results)
         
-        # 3. PROCESS PLAYERS
-        players = []
-        person_detections = detections[detections.class_id == 0]
-        person_detections = tracker.update_with_detections(person_detections)
-        
-        for i, box in enumerate(person_detections.xyxy):
-            id_num = int(person_detections.tracker_id[i]) if person_detections.tracker_id is not None else -1
-            
-            # Position = Feet (Bottom Center of box)
-            feet_x = int((box[0] + box[2]) / 2)
-            feet_y = int(box[3])
-            
-            # Name convention: "P1", "P2" based on ID
-            players.append(Player(
-                pos=Coord(feet_x, feet_y),
-                name=f"P{id_num}"
-            ))
+        # 2. GET PLAYERS (STRICT FILTER)
+        # We pass the raw detections; the function handles confidence checks for players internally
+        # (We rely on the geometric filter to remove low-conf noise outside the court)
+        players = get_best_two_players(detections, raw_court)
 
-        # 4. PROCESS BALL
-        ball = None # Default if no ball found
-        ball_detections = detections[detections.class_id == 32]
+        # 3. GET BALL (SIMPLEGEST FILTER)
+        ball = None 
+        mask_balls = (detections.class_id == 32)
+        ball_detections = detections[mask_balls]
         
         if len(ball_detections) > 0:
-            # Pick the most confident ball
-            box = ball_detections.xyxy[0]
-            cx = int((box[0] + box[2]) / 2)
-            cy = int((box[1] + box[3]) / 2)
-            ball = Ball(pos=Coord(cx, cy))
+            # Find the best ball that is actually inside the court
+            best_ball_conf = -1
+            
+            for i, box in enumerate(ball_detections.xyxy):
+                conf = ball_detections.confidence[i]
+                cx = int((box[0] + box[2]) / 2)
+                cy = int((box[1] + box[3]) / 2)
+                
+                # Check if ball is reasonably inside the court
+                if is_point_in_court((cx, cy), raw_court, buffer=100):
+                    if conf > best_ball_conf:
+                        best_ball_conf = conf
+                        ball = Ball(pos=Coord(cx, cy))
 
-        # 5. YIELD RAW DATA
-        # We send the 'raw_court' every frame so Logic doesn't need to remember state
         yield (frame_count, players, ball, raw_court)
 
     cap.release()

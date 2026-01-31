@@ -4,8 +4,11 @@ import os
 from vision import process_video
 
 # --- CONFIGURATION ---
-VIDEO_PATH = "tennis.mp4"  # <--- REPLACE WITH YOUR VIDEO PATH
-SHOW_VIDEO = True         # Set to False to just print console logs
+VIDEO_PATH = "tennis2.mp4"  # <--- REPLACE WITH YOUR VIDEO PATH
+SHOW_VIDEO = True          # Set to False to just print console logs
+WINDOW_NAME = "Tennis Pipeline Test" # Define window name once
+DISPLAY_WIDTH = 1280       # Initial window width
+DISPLAY_HEIGHT = 720       # Initial window height
 
 def draw_court(frame, court):
     """Draws the court lines based on the 4 corner coordinates."""
@@ -56,8 +59,12 @@ def main():
     pipeline = process_video(VIDEO_PATH)
 
     # 2. Open Video Capture for Visualization (Parallel Read)
-    # We open the video again here just to draw on the frames for the user
     cap_vis = cv2.VideoCapture(VIDEO_PATH)
+
+    # 3. Setup the Window (Resizable)
+    if SHOW_VIDEO:
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(WINDOW_NAME, DISPLAY_WIDTH, DISPLAY_HEIGHT)
 
     try:
         for frame_count, players, ball, court in pipeline:
@@ -80,10 +87,19 @@ def main():
             print(f"Frame {frame_count}: Players={len(players)} | Ball={ball_status}")
 
             if SHOW_VIDEO:
-                cv2.imshow("Tennis Pipeline Test", frame)
+                cv2.imshow(WINDOW_NAME, frame)
+                
                 # Press 'q' to quit early
                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                    print("\nQuit requested by user.")
                     break
+                
+                # Also quit if the window 'X' button is clicked
+                try:
+                    if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+                        break
+                except:
+                    pass
 
     except Exception as e:
         print(f"\nCRITICAL ERROR: {e}")
