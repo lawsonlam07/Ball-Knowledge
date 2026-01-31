@@ -71,6 +71,7 @@ export default function ViewerPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const isTogglingRef = useRef(false)
+  const lastToggleTimeRef = useRef(0)
 
   // State declarations
   const [commentaryResult, setCommentaryResult] = useState<any>(null)
@@ -110,35 +111,56 @@ export default function ViewerPage() {
     if (audioRef.current) {
       audioRef.current.volume = 1.0
     }
-
-    // Cleanup: Revoke blob URL when component unmounts
-    return () => {
-      const blobUrl = sessionStorage.getItem("uploadedVideoUrl")
-      if (blobUrl && blobUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(blobUrl)
-      }
-    }
   }, [])
 
   // Sync audio and video playback (only if commentary audio exists)
   useEffect(() => {
     // Only sync if we have commentary audio
-    if (!commentaryResult?.audio_url) return
+    if (!commentaryResult?.audio_url || !audioRef.current) return
+
+    // Add event listener for when audio ends
+    const handleAudioEnded = () => {
+      console.log("Commentary audio ended")
+      // Don't pause the video when audio ends - let it keep playing
+    }
+
+    const handleAudioError = (e: Event) => {
+      console.error("Audio error:", e)
+    }
+
+    audioRef.current.addEventListener('ended', handleAudioEnded)
+    audioRef.current.addEventListener('error', handleAudioError)
 
     const syncInterval = setInterval(() => {
       if (videoRef.current && audioRef.current && isPlaying) {
         const videoTime = videoRef.current.currentTime
         const audioTime = audioRef.current.currentTime
+        const audioDuration = audioRef.current.duration
+
+        // Don't try to sync if audio has ended
+        if (audioRef.current.ended) {
+          console.log("Audio has ended, skipping sync")
+          return
+        }
+
         const timeDiff = Math.abs(videoTime - audioTime)
 
         // If audio and video are out of sync by more than 0.3 seconds, resync
-        if (timeDiff > 0.3) {
+        // But only if we're not trying to seek beyond the audio duration
+        if (timeDiff > 0.3 && videoTime < audioDuration) {
+          console.log(`Syncing audio: video=${videoTime.toFixed(2)}s, audio=${audioTime.toFixed(2)}s`)
           audioRef.current.currentTime = videoTime
         }
       }
     }, 1000) // Check every second
 
-    return () => clearInterval(syncInterval)
+    return () => {
+      clearInterval(syncInterval)
+      if (audioRef.current) {
+        audioRef.current.removeEventListener('ended', handleAudioEnded)
+        audioRef.current.removeEventListener('error', handleAudioError)
+      }
+    }
   }, [isPlaying, commentaryResult])
 
   // Find current commentary based on video time
@@ -151,13 +173,21 @@ export default function ViewerPage() {
   const togglePlay = useCallback(async () => {
     if (!videoRef.current) return
 
-    // Force unlock if stuck for more than 2 seconds
+    // Check if lock is stuck (held for more than 2 seconds)
+    const now = Date.now()
     if (isTogglingRef.current) {
-      console.warn("Toggle already in progress, forcing unlock...")
-      return
+      const timeSinceLock = now - lastToggleTimeRef.current
+      if (timeSinceLock > 2000) {
+        console.warn("Toggle lock stuck for", timeSinceLock, "ms - forcing unlock")
+        isTogglingRef.current = false
+      } else {
+        console.warn("Toggle already in progress, skipping")
+        return
+      }
     }
 
     isTogglingRef.current = true
+    lastToggleTimeRef.current = now
 
     // Safety timeout to always unlock after 2 seconds
     const timeoutId = setTimeout(() => {
@@ -241,12 +271,21 @@ export default function ViewerPage() {
   const handleSeek = async (value: number[]) => {
     if (!videoRef.current) return
 
+    // Check if lock is stuck (held for more than 2 seconds)
+    const now = Date.now()
     if (isTogglingRef.current) {
-      console.warn("Seek already in progress, forcing unlock...")
-      return
+      const timeSinceLock = now - lastToggleTimeRef.current
+      if (timeSinceLock > 2000) {
+        console.warn("Seek lock stuck for", timeSinceLock, "ms - forcing unlock")
+        isTogglingRef.current = false
+      } else {
+        console.warn("Seek already in progress, skipping")
+        return
+      }
     }
 
     isTogglingRef.current = true
+    lastToggleTimeRef.current = now
 
     // Safety timeout to always unlock after 2 seconds
     const timeoutId = setTimeout(() => {
@@ -321,12 +360,21 @@ export default function ViewerPage() {
   const skipTime = useCallback(async (seconds: number) => {
     if (!videoRef.current) return
 
+    // Check if lock is stuck (held for more than 2 seconds)
+    const now = Date.now()
     if (isTogglingRef.current) {
-      console.warn("Skip already in progress, forcing unlock...")
-      return
+      const timeSinceLock = now - lastToggleTimeRef.current
+      if (timeSinceLock > 2000) {
+        console.warn("Skip lock stuck for", timeSinceLock, "ms - forcing unlock")
+        isTogglingRef.current = false
+      } else {
+        console.warn("Skip already in progress, skipping")
+        return
+      }
     }
 
     isTogglingRef.current = true
+    lastToggleTimeRef.current = now
 
     // Safety timeout to always unlock after 2 seconds
     const timeoutId = setTimeout(() => {

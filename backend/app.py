@@ -290,7 +290,7 @@ Video Duration: approximately {duration} seconds
 IMPORTANT FORMATTING RULES:
 - Do NOT use any formatting characters like asterisks, underscores, or markdown
 - Use plain text only
-- Start each line with a timestamp in the format "0:05 - " or "At 5 seconds - "
+- Start each line with a timestamp in the format "0:05 - "
 - Keep each commentary segment on a single line
 
 Generate a natural, flowing commentary that:
@@ -301,6 +301,7 @@ Generate a natural, flowing commentary that:
 5. Maintains the specified style throughout
 6. Sounds natural when spoken aloud
 7. Includes player movements, shot descriptions, and crowd reactions
+8. Don't refer to players' names unless they appear onscreen
 
 Example format:
 0:00 - Welcome to this exciting tennis match
