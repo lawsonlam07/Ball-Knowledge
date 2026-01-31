@@ -1,7 +1,8 @@
-from .Player import Player
+from logic.perspective import FrameUnskew
 from .Ball import Ball
 from .Court import Court
-from .net import Net
+from .Player import Player
+from .normalisedframe import NormalisedFrame
 
 
 class Frame:
@@ -10,3 +11,11 @@ class Frame:
     self.court = court
     self.player1 = player1
     self.player2 = player2
+
+  def map(self, normaliser: FrameUnskew):
+    return NormalisedFrame(
+      self.ball.map(normaliser),
+      self.court.map(normaliser),
+      self.player1.map(normaliser),
+      self.player2.map(normaliser)
+    )
