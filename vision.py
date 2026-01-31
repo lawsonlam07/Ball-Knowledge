@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
+import os  # <--- Added dependency
 from ultralytics import YOLO
 import supervision as sv
 
 # --- IMPORTS ---
-# Ensure these files exist in your 'data' folder
 from data.Coord import Coord
 from data.Ball import Ball
 from data.Court import Court
@@ -12,7 +12,10 @@ from data.Player import Player
 from data.frame import Frame
 
 # --- CONFIG ---
-MODEL_NAME = 'yolov8m.pt' 
+# Get the directory where THIS file is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Construct absolute path so it works from any folder (e.g. logic/test_normalisation.py)
+MODEL_PATH = os.path.join(BASE_DIR, 'yolov8m.pt')
 
 # THRESHOLDS
 CONF_BALL = 0.15      
@@ -20,7 +23,7 @@ MAX_COAST_FRAMES = 5
 MAX_DIST_ERROR = 100 
 
 # TOGGLE: If True, returns the last known location when detection fails
-RETURN_LAST_KNOWN_POS = False
+RETURN_LAST_KNOWN_POS = True
 
 def get_court_calibration(frame):
     print("✅ Using Hardcoded Court Coordinates")
@@ -74,7 +77,13 @@ def get_best_two_players(detections, court):
 
 def process_video(source_path: str):
     cap = cv2.VideoCapture(source_path)
-    model = YOLO(MODEL_NAME)
+    
+    # --- FIXED MODEL LOADING ---
+    if os.path.exists(MODEL_PATH):
+        model = YOLO(MODEL_PATH)
+    else:
+        print(f"⚠️ Model not found at {MODEL_PATH}, downloading...")
+        model = YOLO("yolov8m.pt") 
     
     ret, first_frame = cap.read()
     if not ret: raise ValueError("Video empty")
