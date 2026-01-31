@@ -1,0 +1,7 @@
+streamlit
+pydantic
+google-generativeai
+elevenlabs
+python-dotenv
+pygame
+
