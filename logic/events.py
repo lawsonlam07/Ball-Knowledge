@@ -225,12 +225,12 @@ class BallInOutTester:
 
         return None
 
-    def _point_in_quadrilateral(self, point: 'Coord', tl: 'Coord', tr: 'Coord', br: 'Coord', bl: 'Coord') -> bool:
+    def _point_in_quadrilateral(self, point, tl, tr, br, bl) -> bool:
         """
         Check if a point is inside a quadrilateral using the cross product method.
         The point is inside if it's on the same side of all four edges.
         """
-        def sign(p1: 'Coord', p2: 'Coord', p3: 'Coord') -> float:
+        def sign(p1, p2, p3) -> float:
             return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
         
         # Check if point is on the correct side of each edge
