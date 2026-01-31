@@ -8,3 +8,4 @@ class Player:
 
   def map(self, normaliser: FrameUnskew):
     self.pos = normaliser.unskew_coords(self.pos.to_vector())
+    return self

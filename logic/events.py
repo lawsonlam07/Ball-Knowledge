@@ -1,87 +1,93 @@
-from abc import abstractmethod, ABC
-from enum import Enum
-
+import numpy as np
 from data.framestack import FrameStack
-from data.normalisedframe import NormalisedFrame
-from logic.perspective import TENNIS_COURT_LENGTH
+from data.frame import NormalisedFrame
 
-threshold = 0.1
-NET_POS = TENNIS_COURT_LENGTH / 2
 
-class EventInterface(ABC):
-    @abstractmethod
+# --- EVENT CLASSES ---
+
+class Event:
     def to_string(self):
-        pass
+        return self.__class__.__name__
 
-class EventTesterInterface(ABC):
-    @abstractmethod
+
+class RallyEvent(Event): pass
+
+
+class BounceEvent(Event): pass
+
+
+class ShotEvent(Event): pass
+
+
+class RightOfNetEvent(Event): pass
+
+
+class LeftOfNetEvent(Event): pass
+
+
+# --- BASE TESTER ---
+
+class SideTester:
+    """
+    Generic tester to detect if the ball is on a specific side of the net.
+    """
+
+    def __init__(self, target_right: bool, event_class: type):
+        self.target_right = target_right
+        self.event_class = event_class
+        self.net_pos_x = 11.885  # Half of 23.77m
+
     def test_event(self, frames: FrameStack):
-        pass
+        recent = frames.takeFrames(1)
 
-class RallyEvent(EventInterface):
-    def to_string(self):
-        return "rally"
-
-class BounceEvent(EventInterface):
-    def to_string(self):
-        return "bounce"
-
-class ShotEvent(EventInterface):
-    def to_string(self):
-        return "shot"
-
-class RallyEventTester(EventTesterInterface):
-    def test_event(self, frames: FrameStack):
-        frames_sided = [self.isRightOfNet(f) for f in frames.takeFrames(2)]
-
-        return any(frames_sided) and not all(frames_sided)
-
-    def isRightOfNet(self, frame: NormalisedFrame):
-        ball_positions = frame.ball.pos
-        if ball_positions.x > NET_POS:
-            return RallyEvent()
-        else:
+        # Guard against empty stack or missing ball detection
+        if not recent or recent[0] is None or recent[0].ball is None:
             return None
 
+        # Check if ball x matches our target side
+        is_right = recent[0].ball.pos.x > self.net_pos_x
 
-class BounceOrShotEventTester(EventTesterInterface):
-    def __init__(self, _is_internal=False):
-        if not _is_internal:
-            raise PermissionError("Constructor is private. Use BounceOrShotEvent.create()")
-
-    @classmethod
-    def create(cls):
-        return cls(_is_internal=True)
-
-    def test_event(self, frames: FrameStack):
-        # Take the last 3 frames to get two segments of movement
-        recent = frames.takeFrames(3)
-        if len(recent) < 3:
-            return None
-
-        # Calculate horizontal velocity (relative to net)
-        # v1: Velocity before the middle frame
-        v1_x = recent[1].ball.pos.x - recent[0].ball.pos.x
-        # v2: Velocity after the middle frame
-        v2_x = recent[2].ball.pos.x - recent[1].ball.pos.x
-
-        # Logic: If the sign of velocity changed, the ball reversed direction (A Shot)
-        # If the sign is the same, but there was a 'spike' in data, it's a Bounce
-        changed_sign = (v1_x > 0) != (v2_x > 0)
-
-        if changed_sign:
-            return ShotEvent()  # Ball reversed direction relative to net
-
-        # If direction didn't change, we check for a 'k' tolerance
-        # (e.g., a sudden drop in speed) to identify a bounce
-        speed_ratio = abs(v2_x) / abs(v1_x) if abs(v1_x) > 0 else 1
-
-        if speed_ratio < 0.8:  # Threshold 'k' for energy loss on bounce
-            return BounceEvent()
+        if is_right == self.target_right:
+            return self.event_class()
 
         return None
 
 
-class EventTesters(Enum, EventTesterInterface):
-    RALLY = RallyEventTester()
-    BOUNCE_OR_SHOT = BounceOrShotEventTester()
+# --- COMPLEX TESTERS ---
+
+class BounceOrShotTester:
+    def test_event(self, frames: FrameStack):
+        recent = frames.takeFrames(3)
+
+        # Ensure we have 3 frames and all have ball data
+        if len(recent) < 3 or any(f is None or f.ball is None for f in recent):
+            return None
+
+        v1_x = recent[1].ball.pos.x - recent[0].ball.pos.x
+        v2_x = recent[2].ball.pos.x - recent[1].ball.pos.x
+
+        # Detect Shot: Horizontal direction reversal
+        if (v1_x > 0) != (v2_x > 0) and abs(v1_x) > 0.05:
+            return ShotEvent()
+
+        # Detect Bounce: Significant loss of horizontal velocity
+        if abs(v1_x) > 0:
+            speed_ratio = abs(v2_x) / abs(v1_x)
+            if speed_ratio < 0.8:
+                return BounceEvent()
+
+        return None
+
+
+# --- REGISTRY ---
+
+class EventTesters:
+    # Instantiate SideTester twice with different configurations
+    LEFT_SIDE = SideTester(target_right=False, event_class=LeftOfNetEvent)
+    RIGHT_SIDE = SideTester(target_right=True, event_class=RightOfNetEvent)
+
+    # Physics-based detection
+    BOUNCE_SHOT = BounceOrShotTester()
+
+    # Java-style .values() equivalent
+    ALL = [LEFT_SIDE, RIGHT_SIDE, BOUNCE_SHOT]

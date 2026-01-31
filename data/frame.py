@@ -13,9 +13,9 @@ class Frame:
     self.player2 = player2
 
   def map(self, normaliser: FrameUnskew):
-    return NormalisedFrame(
-      self.ball.map(normaliser),
-      self.court.map(normaliser),
-      self.player1.map(normaliser),
-      self.player2.map(normaliser)
-    )
+    ball = self.ball.map(normaliser) if self.ball is not None else None
+    court = self.court.map(normaliser) if self.court is not None else None
+    p1 = self.player1.map(normaliser) if self.player1 is not None else None
+    p2 = self.player2.map(normaliser) if self.player2 is not None else None
+
+    return NormalisedFrame(ball, court, p1, p2)
