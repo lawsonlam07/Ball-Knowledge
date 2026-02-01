@@ -23,21 +23,20 @@ Here is the event data:
 
 IMPORTANT INSTRUCTIONS:
 1. Generate a FULL running commentary covering the ENTIRE match from start to finish
-2. Describe each significant moment as it happens in chronological order
+2. Describe significant gameplay changes but you do not need to describe everything
 3. Focus on what matters to understanding the game:
    - When the ball bounces (rally continues)
    - When shots are hit (direction changes)
    - When the ball goes out (point ends)
    - Build excitement during long rallies
    - Note when play stops and restarts
+   - If a ball is "left" it is on the far end of the court: you are looking at it top-down with the net running vertically through your viewport
 4. Don't just list events - create a NARRATIVE that flows naturally
-5. Use present tense as if calling it live ("The ball crosses the net... bounces deep... and it's OUT!")
-6. Add context about what's happening tactically
-7. This should be 1 minute of spoken commentary when read aloud
-8. Think like a radio commentator - paint the picture with words
+5. Add context about tactics but do not make up information: use only the context you have been provided
+6. This should be 1 minute of spoken commentary when read aloud
 
 DO NOT mention "JSON", "events", "frameIndex" or technical terms.
-DO NOT summarize - give the FULL play-by-play.
+You do not have to create commentary at every single point if the commentary would be unsubstantial
 
 Generate the complete commentary now:"""
     
