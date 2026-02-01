@@ -10,12 +10,18 @@ from logic.perspective import FrameUnskew
 from vision.core import VisionSystem, get_court_calibration
 
 def process_frames(url):
+    print(f"\n{'='*80}", flush=True)
+    print(f"🎬 process_frames() CALLED with video: {url}", flush=True)
+    print(f"{'='*80}\n", flush=True)
+
     fps = 60
+    print(f"📹 Initializing VisionSystem...", flush=True)
     system = VisionSystem(url)
     stack = FrameStack(fps)
     i = 0
     order = OrderOfEvents()
-    
+
+    print(f"🔄 Starting frame processing loop...", flush=True)
     while True:
         i += 1
         frame: Frame = system.getNextFrame()
@@ -47,10 +53,17 @@ def process_frames(url):
             stack.dequeue()
 
     # --- THE COMPRESSION LOGIC ---
+    print(f"\n{'='*80}", flush=True)
+    print(f"✅ Frame processing complete! Total frames processed: {i}", flush=True)
+    print(f"🔄 Merging consecutive events...", flush=True)
+
     # Capture the result of the merge
     merged_events = order.mergeConsecutiveEvents()
-    
+
+    print(f"📊 Total events after merge: {len(merged_events)}", flush=True)
+    print(f"{'='*80}\n", flush=True)
+
     # Serialize the MERGED events
     json_array = json.dumps([asdict(e) for e in merged_events], indent=4)
-    
+
     return json_array

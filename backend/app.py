@@ -540,6 +540,9 @@ def generate_full_commentary():
     4. Converts to audio with ElevenLabs
     5. Returns audio file
     """
+    print("\n" + "="*80, flush=True)
+    print("🎬 /api/generate-full-commentary ENDPOINT HIT!", flush=True)
+    print("="*80, flush=True)
     try:
         # Get preferences from form data
         preferences = {
@@ -548,6 +551,7 @@ def generate_full_commentary():
             'voice': request.form.get('voice', 'Adam'),
             'duration': request.form.get('duration', '60')
         }
+        print(f"📝 Received preferences: {preferences}", flush=True)
 
         # Check if video_filename is provided (for pre-downloaded videos)
         timestamp = int(time.time())
@@ -555,39 +559,56 @@ def generate_full_commentary():
         if 'video_filename' in request.form:
             # Video was already downloaded (e.g., from YouTube)
             video_filename = request.form.get('video_filename', '')
+            print(f"📂 video_filename in form: '{video_filename}'", flush=True)
             if not video_filename:
+                print("❌ Error: Video filename is empty", flush=True)
                 return jsonify({'error': 'Video filename is empty'}), 400
 
             video_path = UPLOAD_FOLDER / video_filename
+            print(f"📂 Looking for video at: {video_path}", flush=True)
+            print(f"📂 File exists: {video_path.exists()}", flush=True)
 
             if not video_path.exists():
+                print(f"❌ Error: Downloaded video file not found at {video_path}", flush=True)
                 return jsonify({'error': 'Downloaded video file not found'}), 400
 
-            print(f"📹 Processing pre-downloaded video: {video_filename}")
-            print(f"⚙️ Preferences: {preferences}")
+            print(f"📹 Processing pre-downloaded video: {video_filename}", flush=True)
+            print(f"⚙️ Preferences: {preferences}", flush=True)
         else:
             # Normal file upload
+            print("📤 Checking for uploaded video file...", flush=True)
             if 'video' not in request.files:
+                print("❌ Error: No video file in request.files", flush=True)
+                print(f"📋 Available form keys: {list(request.form.keys())}", flush=True)
+                print(f"📋 Available file keys: {list(request.files.keys())}", flush=True)
                 return jsonify({'error': 'No video file provided'}), 400
 
             video_file = request.files['video']
             if video_file.filename == '':
+                print("❌ Error: Video file has empty filename", flush=True)
                 return jsonify({'error': 'No video file selected'}), 400
 
-            print(f"📹 Processing uploaded video: {video_file.filename}")
-            print(f"⚙️ Preferences: {preferences}")
+            print(f"📹 Processing uploaded video: {video_file.filename}", flush=True)
+            print(f"⚙️ Preferences: {preferences}", flush=True)
 
             # Save uploaded video
             video_filename = f"{timestamp}_{video_file.filename}"
             video_path = UPLOAD_FOLDER / video_filename
+            print(f"💾 Saving video to: {video_path}", flush=True)
             video_file.save(str(video_path))
+            print(f"✅ Video saved successfully", flush=True)
 
         # Step 1: Process video frames to extract events
+        print("\n" + "="*80, flush=True)
         print(f"📊 PIPELINE_AVAILABLE: {PIPELINE_AVAILABLE}", flush=True)
+        print(f"📊 Video path for processing: {video_path}", flush=True)
+        print("="*80 + "\n", flush=True)
         if PIPELINE_AVAILABLE:
-            print("🎬 Processing video frames...", flush=True)
+            print("🎬 Starting process_frames() - YOU SHOULD SEE FRAME OUTPUT BELOW:", flush=True)
+            print("-" * 80, flush=True)
             raw_json = process_frames(str(video_path))
-            print(f"✅ Extracted events from video", flush=True)
+            print("-" * 80, flush=True)
+            print("✅ process_frames() completed - Extracted events from video", flush=True)
 
             # Save JSON for debugging
             json_output_path = UPLOAD_FOLDER / f"{timestamp}_events.json"
@@ -713,4 +734,10 @@ def serve_audio(filename):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    print("\n" + "="*80, flush=True)
+    print("🚀 Starting Flask Server", flush=True)
+    print(f"📊 PIPELINE_AVAILABLE: {PIPELINE_AVAILABLE}", flush=True)
+    print(f"🎙️ ELEVENLABS_AVAILABLE: {ELEVENLABS_AVAILABLE}", flush=True)
+    print("🌐 Server running on http://0.0.0.0:5000", flush=True)
+    print("="*80 + "\n", flush=True)
     app.run(debug=DEBUG, host='0.0.0.0', port=5000)
