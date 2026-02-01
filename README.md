@@ -14,7 +14,7 @@ The interface for our web app is sleek and intuitive. Using a minimalist approac
 2. The method of input is simple and intuitive.
 3. A final layer of customisation allows the user to tailor the commentator's style to better suit their needs.
 
-## 🎗️ Charity: British Blind Sport
+## 🎗️ Charity: Access Sport
 While developing Ball Knowledge, we aligned our goals with Access Sport, a charity dedicated to providing disabled and disadvantaged young people with access to the life-changing benefits of sport.
 
 Our framework supports their "Inclusive Club Network" through three primary pillars:
@@ -25,7 +25,7 @@ Sensory-Friendly Spectatorship For neurodivergent fans, standard high-velocity c
 
 Scaling Volunteer Impact Grassroots clubs rely on volunteers who are often stretched thin. By automating descriptive commentary and match analysis, we empower these clubs to provide an accessible experience for parents and fans without needing extra human resources.
 
-## 🌍 The Mission: Why This Matters
+## 🌍 The Mission: Equity in Every Match
 For many, following a fast-paced sport like tennis is an exercise in exclusion. Whether due to visual impairment, neurodivergence, or simply a lack of resources in local parks, standard broadcasts fail to provide an inclusive narrative. Current solutions often ignore:
 
 Spatial Context: Where is the player positioned? Is a local youth player holding their ground or being forced wide?
