@@ -173,7 +173,14 @@ Context: {match_context}
 Events:
 {json.dumps(events, indent=2)}
 
-Provide natural, exciting commentary that captures the action and energy of the match."""
+Provide natural, exciting commentary that captures the action and energy of the match.
+You must produce commentary similar to a professional commentator
+This means that you do not speak continually and only speak when you are able to provide insight about the gameplay.
+When we say "left" in a prompt it means that the ball is in the top of the court as the camera sees it.
+You may only use information contained within the prompt. You may use context to change how engaging the commentary is.
+Events are timestamped in frames at 60FPS.
+You must ensure that your commentary can be spoken at a normal human pace without needing to be spoken unnaturally quickly.
+Do not provide any text other than the commentary"""
 
         # Generate commentary using Claude
         response = anthropic_client.messages.create(
