@@ -20,6 +20,7 @@ class RallyEvent(Event): pass
 class BounceEvent(Event): pass
 class ShotEvent(Event): pass
 class RightOfNetEvent(Event): pass
+
 class LeftOfNetEvent(Event): pass
 class PlayerUpEvent(Event): pass
 class PlayerDownEvent(Event): pass
