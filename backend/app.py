@@ -16,6 +16,10 @@ load_dotenv()
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Add src directory to path for importing pipeline modules
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(PROJECT_ROOT, 'src'))
+
 from config import (
     DEFAULT_VOICE,
     UPLOAD_FOLDER,
@@ -27,6 +31,16 @@ from config import (
     DEBUG,
     ELEVENLABS_API_KEY
 )
+
+# Import pipeline functions
+try:
+    from logic.pipeline import process_frames
+    from voice.prompts import generate_commentary
+    PIPELINE_AVAILABLE = True
+    print("✅ Pipeline modules loaded successfully")
+except ImportError as e:
+    PIPELINE_AVAILABLE = False
+    print(f"⚠️ Pipeline modules not available: {e}")
 
 app = Flask(__name__)
 CORS(app)
@@ -340,6 +354,56 @@ def parse_timestamped_commentary(commentary_text):
 
     return segments
 
+def parse_commentary_script_to_segments(commentary_script):
+    """
+    Convert a continuous commentary script into timestamped segments using Claude
+    """
+    prompt = f"""You have a continuous tennis match commentary script. Your job is to break it down into timestamped segments for synchronization with video.
+
+Commentary script:
+{commentary_script}
+
+CRITICAL: You MUST respond with valid JSON ONLY. No other text before or after.
+Break this commentary into segments and add timestamps (in seconds) for when each segment should be spoken.
+Space them out naturally - typically 3-5 seconds apart, but use longer gaps when it makes sense.
+
+Format your response as a JSON array:
+[
+  {{"timestamp": 0, "text": "First segment of commentary"}},
+  {{"timestamp": 4, "text": "Second segment of commentary"}},
+  {{"timestamp": 8, "text": "Third segment of commentary"}}
+]
+
+Rules:
+- Each segment should be 1-2 sentences
+- Start at timestamp 0
+- Space segments 3-8 seconds apart based on natural pauses
+- Return ONLY the JSON array, nothing else"""
+
+    response = anthropic_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    response_text = response.content[0].text.strip()
+    print(f"📝 Segmentation response: {response_text[:300]}...")
+
+    try:
+        # Try to extract JSON from markdown code blocks if present
+        if response_text.startswith('```'):
+            json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', response_text, re.DOTALL)
+            if json_match:
+                response_text = json_match.group(1).strip()
+
+        segments = json.loads(response_text)
+        print(f"✅ Successfully segmented into {len(segments)} parts")
+        return segments
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Failed to parse segmentation response: {e}")
+        # Fallback: return the entire script as one segment
+        return [{"timestamp": 0, "text": commentary_script}]
+
 def generate_commentary_for_video(video_path, preferences):
     """
     Generate tennis commentary using Claude AI
@@ -517,10 +581,39 @@ def generate_full_commentary():
             video_path = UPLOAD_FOLDER / video_filename
             video_file.save(str(video_path))
 
-        # Step 1: Generate commentary with Claude
-        print("🤖 Generating commentary with Claude...")
-        commentary_segments = generate_commentary_for_video(video_path, preferences)
-        print(f"✅ Generated {len(commentary_segments)} commentary segments")
+        # Step 1: Process video frames to extract events
+        if PIPELINE_AVAILABLE:
+            print("🎬 Processing video frames...")
+            raw_json = process_frames(str(video_path))
+            print(f"✅ Extracted events from video")
+
+            # Save JSON for debugging
+            json_output_path = UPLOAD_FOLDER / f"{timestamp}_events.json"
+            with open(json_output_path, 'w') as f:
+                f.write(raw_json)
+            print(f"📝 Saved events to {json_output_path}")
+
+            # Step 2: Generate commentary from events
+            print("🤖 Generating commentary with Claude based on video analysis...")
+            persona = f"{preferences['style']} tennis commentator with {preferences['energy']} energy"
+            commentary_script = generate_commentary(raw_json, persona)
+            print(f"✅ Generated commentary script")
+
+            # Save script for debugging
+            script_output_path = UPLOAD_FOLDER / f"{timestamp}_script.txt"
+            with open(script_output_path, 'w') as f:
+                f.write(commentary_script)
+            print(f"📝 Saved script to {script_output_path}")
+
+            # Parse the commentary script into timestamped segments
+            # The script from generate_commentary should have timestamps
+            commentary_segments = parse_commentary_script_to_segments(commentary_script)
+            print(f"✅ Parsed {len(commentary_segments)} commentary segments")
+        else:
+            # Fallback: Use old method if pipeline not available
+            print("⚠️ Pipeline not available, using fallback commentary generation...")
+            commentary_segments = generate_commentary_for_video(video_path, preferences)
+            print(f"✅ Generated {len(commentary_segments)} commentary segments")
 
         # Convert segments back to text format for compatibility
         commentary_text = "\n".join([
