@@ -1,31 +1,31 @@
 import cv2
 import numpy as np
+import os
 from ultralytics import YOLO
 import supervision as sv
 
 # --- IMPORTS ---
-# Ensure these files exist in your 'data' folder
 from data.Coord import Coord
 from data.Ball import Ball
 from data.Court import Court
 from data.Player import Player
-from data.Frame import Frame 
+from data.frame import Frame
 
 # --- CONFIG ---
-MODEL_NAME = 'yolov8m.pt' 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_NAME = os.path.join(BASE_DIR, 'yolov8m.pt') 
 
 # THRESHOLDS
-CONF_BALL = 0.15      
+CONF_BALL = 0.10      
 MAX_COAST_FRAMES = 5 
 MAX_DIST_ERROR = 100 
 
 # TOGGLE: If True, returns the last known location when detection fails
-RETURN_LAST_KNOWN_POS = False
+RETURN_LAST_KNOWN_POS = False 
 
 def get_court_calibration(frame):
     print("✅ Using Hardcoded Court Coordinates")
     return Court(
-        # 1080p Coordinates:
         tl=Coord(746, 257), tr=Coord(1183, 254),
         br=Coord(1879, 836), bl=Coord(27, 841)
     )
@@ -56,16 +56,20 @@ def get_best_two_players(detections, court):
 
     for i, box in enumerate(people.xyxy):
         x1, y1, x2, y2 = box
+        # Calculate feet (bottom center) and torso (center)
         feet = (int((x1 + x2) / 2), int(y2))
         torso = (int((x1 + x2) / 2), int((y1 + y2) / 2))
         conf = people.confidence[i]
 
         if not is_player_in_court(feet, court, buffer=150): continue
 
+        # --- UPDATED: Save 'feet' instead of 'torso' ---
         if feet[1] < net_y:
-            if top is None or conf > top['conf']: top = {'pos': torso, 'conf': conf}
+            if top is None or conf > top['conf']: 
+                top = {'pos': feet, 'conf': conf} 
         else:
-            if bottom is None or conf > bottom['conf']: bottom = {'pos': torso, 'conf': conf}
+            if bottom is None or conf > bottom['conf']: 
+                bottom = {'pos': feet, 'conf': conf}
 
     players = []
     if top: players.append(Player(pos=Coord(*top['pos']), name="P2"))
@@ -74,7 +78,12 @@ def get_best_two_players(detections, court):
 
 def process_video(source_path: str):
     cap = cv2.VideoCapture(source_path)
-    model = YOLO(MODEL_NAME)
+    
+    if os.path.exists(MODEL_NAME):
+        model = YOLO(MODEL_NAME)
+    else:
+        print(f"⚠️ Model not found at {MODEL_NAME}, downloading to CWD...")
+        model = YOLO("yolov8m.pt")
     
     ret, first_frame = cap.read()
     if not ret: raise ValueError("Video empty")
@@ -94,8 +103,8 @@ def process_video(source_path: str):
         if not ret: break
         frame_count += 1
         
-        # 1. DETECT (Removed imgsz=1280 for speed)
-        results = model(frame, classes=[0, 32], conf=CONF_BALL, verbose=False)[0]
+        # 1. DETECT 
+        results = model(frame, classes=[0, 32], conf=CONF_BALL, imgsz=1280, verbose=False)[0]
         detections = sv.Detections.from_ultralytics(results)
         
         players = get_best_two_players(detections, raw_court)
@@ -159,33 +168,19 @@ def process_video(source_path: str):
 
     cap.release()
 
-# --- VISION SYSTEM CLASS ---
 class VisionSystem:
     def __init__(self, video_path):
         self.pipeline = process_video(video_path)
 
     def getNextFrame(self):
-        """
-        Returns a Frame object (ball, court, player1, player2).
-        If ball/players are not found, they will be None.
-        Returns None when video ends.
-        """
         try:
-            # Get data from generator
             _, players_list, ball, court = next(self.pipeline)
-
-            # Default to None (null)
             p1 = None
             p2 = None
-
-            # Map based on fixed names assigned in get_best_two_players
             for p in players_list:
-                if p.name == "P1":
-                    p1 = p
-                elif p.name == "P2":
-                    p2 = p
+                if p.name == "P1": p1 = p
+                elif p.name == "P2": p2 = p
             
-            # ball is already None if not found in process_video
             return Frame(ball=ball, court=court, player1=p1, player2=p2)
 
         except StopIteration:

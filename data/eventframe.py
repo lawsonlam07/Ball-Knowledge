@@ -1,6 +1,7 @@
-from .frame import Frame
+from dataclasses import dataclass
 
+
+@dataclass
 class EventFrame:
-  def __init__(self, frame : Frame, event : str):
-    self.frame = frame
-    self.event = event
+    frameIndex: int
+    event: str
