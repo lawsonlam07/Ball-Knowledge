@@ -33,11 +33,13 @@ def generate_commentary(event_json, persona_style):
     return response.content[0].text
 
 def speak_text(text):
-    # Uses ElevenLabs streaming API
-    audio_stream = el_client.generate(
+    """
+    Uses the modern ElevenLabs client syntax to stream audio.
+    """
+    audio_stream = el_client.text_to_speech.convert(
         text=text,
-        voice="Brian", 
-        model="eleven_turbo_v2",
-        stream=True
+        voice_id="JBFqnCBsd6RMkjVDRZzb", # 'George' voice ID
+        model_id="eleven_turbo_v2",
+        output_format="mp3_44100_128"
     )
     return audio_stream
